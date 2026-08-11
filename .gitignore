@@ -216,3 +216,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Model checkpoints
+models/*_best.pth
+
+# Dataset
+data/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Vercel (created locally when you run `vercel` CLI, not needed in repo)
+.vercel/
