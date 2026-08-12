@@ -1,87 +1,194 @@
-# CharClassifier
+# CharClassifier — DevaVision
 
-A custom CNN that classifies handwritten Devanagari/Sanskrit characters across **62 classes**, deployed as a live web app with draw and upload input.
+A custom CNN for **62-class handwritten Devanagari/Sanskrit character recognition**, deployed as an interactive web application with both drawing and image-upload input.
 
-![Status](https://img.shields.io/badge/status-live-brightgreen?style=flat-square)
+**🔗 Live Demo:** [char-classifier.vercel.app](https://char-classifier.vercel.app/)
+**📄 API Docs:** [sanskritchar-api.onrender.com/docs](https://sanskritchar-api.onrender.com/docs)
 
-**Live demo:** https://char-classifier-6dsclr1hv-yashitha618-1281s-projects.vercel.app/
-
-Draw a character or upload an image → it's sent to a FastAPI backend → classified by the trained CNN → returns the predicted class with confidence and top-3 alternatives.
+Draw a character or upload an image → the frontend sends it to a deployed FastAPI service → the CNN classifies it → the app returns the predicted class, confidence score, and top-3 predictions.
 
 ---
 
-## Problem
+## Table of Contents
 
-Handwritten characters vary a lot — stroke thickness, slant, positioning — even for the same class. The goal was to build a CNN from scratch (not a pre-trained model) and *study* how architecture choices, regularization, and augmentation each affect generalization, rather than just chasing one final accuracy number.
+- [Overview](#overview)
+- [ML Pipeline](#ml-pipeline)
+- [Dataset](#dataset)
+- [Preprocessing](#preprocessing)
+- [CNN Architecture](#cnn-architecture)
+- [Experiments](#experiments)
+- [Evaluation](#evaluation)
+- [Error Analysis](#error-analysis)
+- [API](#api)
+- [Web Application](#web-application)
+- [System Architecture](#system-architecture)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Running Locally](#running-locally)
+- [Key Design Decisions](#key-design-decisions)
 
-## Pipeline
+---
+
+## Overview
+
+Handwritten characters vary significantly in stroke thickness, shape, slant, and positioning. The goal of this project was not just to train a classifier, but to build and evaluate a **complete deep learning pipeline** — studying how regularization, augmentation, and learning-rate selection affect generalization.
+
+The model was built **from scratch using PyTorch**, rather than relying on transfer learning, to keep the architecture and optimization process fully transparent.
+
+---
+
+## ML Pipeline
 
 ```
-Dataset → EDA → Preprocessing → Stratified 80/10/10 Split
-   → Custom CNN → [Baseline | +BatchNorm/Dropout | +Augmentation]
-   → LR sweep → Final model → Test evaluation → Error analysis
-   → Model export → FastAPI → Web app (Vercel + Render)
+Dataset → EDA → Preprocessing → Stratified 80/10/10 Split → Custom CNN
+   → Baseline → BatchNorm + Dropout → Data Augmentation → Learning-Rate Sweep
+   → Final Model → Test Evaluation → Confusion Matrix + Error Analysis
+   → Model Export → FastAPI Inference API → Interactive Web Application
 ```
 
-## Model
+---
+
+## Dataset
+
+The project uses a handwritten Devanagari/Sanskrit character dataset containing **62 classes**.
+
+Before training, the dataset was analyzed for:
+- Class distribution
+- Image dimensions and modes
+- Pixel value ranges
+- Representative character samples
+
+The data was split using stratified sampling:
+
+| Split | Proportion |
+|---|---|
+| Training | 80% |
+| Validation | 10% |
+| Test | 10% |
+
+The test set was kept completely separate from model selection and hyperparameter experiments.
+
+---
+
+## Preprocessing
 
 ```
-Input 1×32×32
-  → Conv(32) + BN + ReLU + MaxPool
-  → Conv(64) + BN + ReLU + MaxPool
-  → Conv(128) + BN + ReLU
-  → Global Average Pool → Dropout → Linear → 62 classes
+Image → Grayscale → Resize (32×32) → Tensor → Normalization
 ```
 
-Channel depth increases progressively (32→64→128) so early layers pick up simple strokes and deeper layers learn character-level structure. Global Average Pooling keeps the classifier head small and less prone to overfitting than a large flattened FC layer.
+Images are converted to grayscale, resized to 32×32, converted to tensors, and normalized using statistics computed from the training data. Training data additionally uses augmentation, while validation and test data use deterministic preprocessing.
+
+---
+
+## CNN Architecture
+
+```
+Input: 1 × 32 × 32
+   │
+   ▼
+Conv 1 → 32 channels → BatchNorm + ReLU + MaxPool
+   │
+   ▼
+Conv 2 → 64 channels → BatchNorm + ReLU + MaxPool
+   │
+   ▼
+Conv 3 → 128 channels → BatchNorm + ReLU
+   │
+   ▼
+Global Average Pooling
+   │
+   ▼
+Dropout
+   │
+   ▼
+Linear Layer → 62 Classes
+```
+
+The network progressively increases feature depth (32 → 64 → 128), allowing early layers to learn low-level stroke patterns while deeper layers capture character-specific visual features. Global Average Pooling keeps the classification head compact and reduces parameter count compared to directly flattening the feature maps.
+
+---
 
 ## Experiments
 
-Each stage changes **one variable** at a time, so gains can be attributed to a specific technique rather than several changes at once:
+The model was developed through controlled experiments rather than selecting a single architecture immediately. The final configuration was chosen using validation performance.
 
-| Stage | Change | Purpose |
+| Experiment | Configuration | Purpose |
 |---|---|---|
-| Baseline | Plain CNN | Reference point |
-| + Regularization | BatchNorm + Dropout | Effect of regularization alone |
-| + Augmentation | Same model, augmented data | Effect of data augmentation alone |
-| LR sweep | Best config, 3 learning rates | Isolate optimizer tuning |
+| Baseline | CNN | Establish reference performance |
+| Regularized | + BatchNorm + Dropout | Study regularization |
+| Augmented | + Data Augmentation | Study robustness to input variation |
+| LR Sweep | 3 learning rates | Study optimization behaviour |
 
-**Best validation accuracy: 95.35%**, selected by val accuracy (not train accuracy) to avoid picking an overfit checkpoint. Test set stayed untouched until final evaluation.
+**Best Validation Accuracy: 95.35%**
+
+The best checkpoint was selected based on validation accuracy rather than training accuracy. The held-out test set was not used during model selection.
+
+---
 
 ## Evaluation
 
-Reported with macro-averaged Precision/Recall/F1 (not just accuracy), since with 62 classes, overall accuracy can mask poor performance on individual classes.
+The final model is evaluated using:
+- Accuracy
+- Macro Precision / Recall / F1
+- Confusion Matrix
+- Misclassified sample analysis
+
+Macro-averaged metrics are reported because the problem contains 62 classes, and overall accuracy alone does not show how performance varies across individual classes.
 
 | Metric | Score |
 |---|---|
-| Test Accuracy | *TBD* |
-| Macro Precision | *TBD* |
-| Macro Recall | *TBD* |
-| Macro F1 | *TBD* |
+| Test Accuracy | **95.45%** |
+| Macro Precision | **96.03%** |
+| Macro Recall | **95.45%** |
+| Macro F1 | **95.36%** |
 
-A confusion matrix and misclassified-example grid (actual vs. predicted vs. confidence) are used to identify which characters get confused and why — see `results/`.
+---
+
+## Error Analysis
+
+A row-normalized confusion matrix is used to identify frequently confused character pairs. Misclassified samples are also visualized with:
+- Actual class
+- Predicted class
+- Prediction confidence
+
+This provides a qualitative view of where the model struggles and connects model errors to visually similar character patterns. Results and visualizations are available in [`results/`](./results).
+
+---
 
 ## API
 
-**Interactive docs (Swagger):** `https://sanskritchar-api.onrender.com/docs`
+The trained model is served through a FastAPI REST API.
 
-### `GET /health`
-Returns service status and the number of classes the model was trained on.
+**Swagger Documentation:** https://sanskritchar-api.onrender.com/docs
 
-```bash
-curl https://sanskritchar-api.onrender.com/health
+### Health Check
+
 ```
+GET /health
+```
+
 ```json
-{ "status": "ok", "num_classes": 62 }
+{
+  "status": "ok",
+  "num_classes": 62
+}
 ```
 
-### `POST /predict`
-Accepts a single image file (`multipart/form-data`), returns the predicted class, its confidence, and the top-3 predictions.
+### Prediction
+
+```
+POST /predict
+```
+
+Accepts an image via `multipart/form-data`.
 
 ```bash
 curl -X POST https://sanskritchar-api.onrender.com/predict \
   -F "file=@character.png"
 ```
+
+**Example response:**
+
 ```json
 {
   "predicted_class": "60_8",
@@ -94,54 +201,190 @@ curl -X POST https://sanskritchar-api.onrender.com/predict \
 }
 ```
 
-Preprocessing (grayscale → resize → normalize) is identical at inference and training time — the normalization stats and class list are loaded directly from `best_model.pth`, so the two can't silently drift apart.
+The inference pipeline uses the same grayscale conversion, resizing, and normalization used during training. Normalization statistics and class names are stored with the model checkpoint so the deployed API can reconstruct the training-time preprocessing configuration.
 
-## Architecture
+---
+
+## Web Application
+
+The frontend provides two input modes:
+
+**Draw**
+```
+Canvas → PNG → FastAPI → CNN → Prediction
+```
+Users draw a character directly on a canvas.
+
+**Upload**
+```
+Image → FastAPI → CNN → Prediction
+```
+Users upload an existing character image.
+
+The interface displays the predicted class, confidence score, and top-3 predictions.
+
+---
+
+## System Architecture
 
 ```
-User → Draw/Upload → Frontend (Vercel) → POST /predict
-     → FastAPI (Render) → Custom CNN (PyTorch) → Prediction + confidence
+                        User
+                         │
+                  Draw / Upload
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │  Frontend   │
+                  │   Vercel    │
+                  └──────┬──────┘
+                         │
+                    POST /predict
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │   FastAPI   │
+                  │   Render    │
+                  └──────┬──────┘
+                         │
+                    Preprocessing
+                         │
+                         ▼
+                  ┌─────────────┐
+                  │  Custom CNN │
+                  │   PyTorch   │
+                  └──────┬──────┘
+                         │
+                         ▼
+              Prediction + Confidence
 ```
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
+<p>
+  <img src="https://img.shields.io/badge/-Python-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/-PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Torchvision-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white" />
+  <img src="https://img.shields.io/badge/-NumPy-013243?style=for-the-badge&logo=numpy&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Pandas-150458?style=for-the-badge&logo=pandas&logoColor=white" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/-Scikit--learn-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Matplotlib-11557C?style=for-the-badge&logo=plotly&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Pillow-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Uvicorn-2A308B?style=for-the-badge&logo=gunicorn&logoColor=white" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/-HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white" />
+  <img src="https://img.shields.io/badge/-CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white" />
+  <img src="https://img.shields.io/badge/-JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" />
+  <img src="https://img.shields.io/badge/-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white" />
+</p>
+
+<p>
+  <img src="https://img.shields.io/badge/-Jupyter-F37626?style=for-the-badge&logo=jupyter&logoColor=white" />
+  <img src="https://img.shields.io/badge/-Git-F05032?style=for-the-badge&logo=git&logoColor=white" />
+</p>
+
+| Layer | Technologies |
 |---|---|
-| Modeling | PyTorch, Torchvision, scikit-learn, NumPy, Pandas |
-| Backend | FastAPI, Uvicorn, Python 3.10 |
+| Language | Python |
+| Deep Learning | PyTorch, Torchvision |
+| Data Processing | NumPy, Pandas |
+| Evaluation | Scikit-learn |
+| Visualization | Matplotlib |
+| Image Processing | Pillow |
+| Backend | FastAPI, Uvicorn |
 | Frontend | HTML, CSS, JavaScript |
-| Deployment | Vercel (frontend), Render (backend) |
-| Tooling | Git, Jupyter
+| Deployment | Vercel, Render |
+| Development | Jupyter Notebook, Git |
+
+---
 
 ## Project Structure
 
 ```
 CharClassifier/
-├── api/main.py              # FastAPI inference service
-├── frontend/                 # Draw/upload web UI
-├── models/best_model.pth     # Trained weights + metadata
-├── notebooks/                # EDA → training → evaluation
-├── results/                  # Confusion matrix, curves, error analysis
+│
+├── api/
+│   └── main.py
+│
+├── data/
+│   └── Sanskrit Mnist/
+│
+├── models/
+│   └── best_model.pth
+│
+├── notebooks/
+│   └── 01_char_recognition.ipynb
+│
+├── results/
+│   ├── training_curves.png
+│   ├── confusion_matrix.png
+│   ├── error_analysis.png
+│   └── experiment_comparison.csv
+│
 ├── requirements.txt
+├── .gitignore
 └── README.md
 ```
 
+---
+
 ## Running Locally
 
+**1. Clone the repository**
 ```bash
 git clone <repo-url>
 cd CharClassifier
+```
+
+**2. Create a virtual environment**
+```bash
 python -m venv .venv
-.venv\Scripts\activate        # Windows
+```
+
+Activate it (Windows):
+```bash
+.venv\Scripts\activate
+```
+
+**3. Install dependencies**
+```bash
 pip install -r requirements.txt
+```
+
+**4. Start the API**
+```bash
 uvicorn api.main:app --reload
 ```
-API: `http://127.0.0.1:8000` · Docs: `http://127.0.0.1:8000/docs`
+
+- API: http://127.0.0.1:8000
+- Swagger docs: http://127.0.0.1:8000/docs
+
+---
 
 ## Key Design Decisions
 
-- **Custom CNN over transfer learning** — keeps the architecture and learning process fully explicit and analyzable.
-- **Stratified split** — class proportions preserved across train/val/test.
-- **Validation-based model selection** — test set stays unbiased until the very end.
-- **Train-only augmentation** — val/test always evaluated on clean, deterministic preprocessing.
-- **Metadata saved with checkpoint** — normalization stats and class names travel with the model, so training and deployment can't drift apart.
+**Custom CNN**
+Implemented from scratch to make the architecture, feature extraction, and optimization process explicit rather than hiding them behind a pre-trained backbone.
+
+**Stratified splitting**
+Preserves class proportions across training, validation, and test sets.
+
+**Controlled experiments**
+Structured so that performance changes could be attributed to specific techniques — regularization, augmentation, or learning-rate selection.
+
+**Validation-based model selection**
+The validation set was used for model and hyperparameter selection while the test set remained untouched until final evaluation.
+
+**Train-only augmentation**
+Augmentation is applied only to training images. Validation and test images use deterministic preprocessing.
+
+**Checkpoint metadata**
+The model checkpoint stores class names, image size, and normalization statistics so the deployment pipeline can reproduce the training-time preprocessing configuration.
