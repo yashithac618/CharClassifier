@@ -65,7 +65,7 @@ _transform = transforms.Compose([
 ])
 
 app = FastAPI(
-    title="DevaVision API",
+    title="CharClassifier API",
     description="Handwritten Sanskrit character recognition using a CNN",
     version="1.0.0"
 )
