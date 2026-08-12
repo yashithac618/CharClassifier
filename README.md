@@ -349,9 +349,12 @@ cd CharClassifier
 python -m venv .venv
 ```
 
-Activate it (Windows):
+Activate it:
 ```bash
+# Windows
 .venv\Scripts\activate
+# macOS/Linux
+source .venv/bin/activate
 ```
 
 **3. Install dependencies**
@@ -388,3 +391,14 @@ Augmentation is applied only to training images. Validation and test images use 
 
 **Checkpoint metadata**
 The model checkpoint stores class names, image size, and normalization statistics so the deployment pipeline can reproduce the training-time preprocessing configuration.
+
+## Limitations
+
+- Trained on a single dataset; may not generalize to handwriting styles or pens/pencils outside its distribution.
+- Fixed 32×32 grayscale input may lose fine stroke detail, contributing to some class confusions.
+- Training set is not perfectly class-balanced; no explicit reweighting was applied.
+- Classifies one character at a time — no support for words or connected script.
+- Not evaluated on rotated/skewed inputs or out-of-distribution samples.
+- No automated tests yet; a smoke test for the `/predict` endpoint is the planned next step.
+- Not load-tested for concurrent traffic or large images.
+
